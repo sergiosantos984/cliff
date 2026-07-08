@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cliff — Local Technical Engine</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        :root {
+            --slate-blue: #334155;
+            --warm-white: #FAFAF8;
+            --light-taupe: #E7E2DA;
+            --dusty-blue: #A7C0D9;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--warm-white); color: var(--slate-blue); display: flex; justify-content: center; padding: 40px; }
+        .app-container { background: white; width: 100%; max-width: 680px; padding: 40px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid var(--light-taupe); }
+
+        header { text-align: center; margin-bottom: 30px; }
+        h1 { color: var(--slate-blue); margin-bottom: 5px; }
+        
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; color: var(--slate-blue); }
+        input, textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--light-taupe); background-color: var(--warm-white); }
+        
+        .file-dropzone { border: 2px dashed var(--light-taupe); border-radius: 10px; padding: 30px; text-align: center; cursor: pointer; color: var(--slate-blue); transition: 0.2s; }
+        .file-dropzone:hover { border-color: var(--dusty-blue); }
+        .file-input { display: none; }
+
+        button { width: 100%; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; background-color: var(--slate-blue); color: white; transition: 0.2s; }
+        button:hover { background-color: #1e293b; }
+        .btn-secondary { background-color: var(--dusty-blue); color: var(--slate-blue); margin-top: 10px; display: none; }
+        
+        #workspaceStack { display: none; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header><h1>Cliff</h1><p>Local Technical Engine</p></header>
+
+    <div class="form-group">
+        <label>Job Title</label>
+        <input type="text" id="jobTitle" placeholder="e.g. Senior Backend Engineer">
+    </div>
+
+    <div class="form-group">
+        <label>Upload Job Description (.docx)</label>
+        <div class="file-dropzone" onclick="document.getElementById('fileInput').click()">
+            <p id="dropzoneText">➔ Click to upload .docx</p>
+            <input type="file" id="fileInput" class="file-input" accept=".docx" onchange="handleFileSelect(event)">
+        </div>
+    </div>
+
+    <div id="workspaceStack">
+        <label>Extracted Document Content</label>
+        <textarea id="jobDescription" rows="6"></textarea>
+    </div>
+
+    <button id="generateBtn" onclick="processLocally()" style="margin-top:20px;">Generate Questionnaire</button>
+    <button class="btn-secondary" id="downloadBtn" onclick="downloadWordFile()">Download Word File</button>
+</div>
+
+<script>
+    let cleanedJDContent = "";
+    let finalQuestions = [];
+
+    async function extractDocxText(arrayBuffer) {
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const xmlText = await zip.file("word/document.xml").async("text");
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        return Array.from(xmlDoc.getElementsByTagName("w:t")).map(n => n.textContent).join(" ");
+    }
+
+    async function handleFileSelect(event) {
+        const file = event.target.files[0];
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            document.getElementById('jobDescription').value = await extractDocxText(e.target.result);
+            document.getElementById('workspaceStack').style.display = 'block';
+            document.getElementById('dropzoneText').innerText = `✓ ${file.name}`;
+            
+            if(!document.getElementById('jobTitle').value) {
+                document.getElementById('jobTitle').value = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // Local Parsing and Questionnaire Building Execution
+    function processLocally() {
+        const rawText = document.getElementById('jobDescription').value;
+        const jobTitle = document.getElementById('jobTitle').value || "Technical Position";
+
+        if (!rawText.trim()) {
+            alert("Please upload a valid document or input text before generating.");
+            return;
+        }
+
+        // Split text cleanly by common sentence blocks or bullets to reconstruct structurally
+        const fragments = rawText.split(/[.!?;\n]/).map(f => f.trim()).filter(f => f.length > 15);
+        
+        let responsibilities = [];
+        let requirements = [];
+
+        // Simple local deterministic categorizer based on language markers
+        fragments.forEach(fragment => {
+            const lower = fragment.toLowerCase();
+            if (lower.includes("experience") || lower.includes("degree") || lower.includes("must") || lower.includes("skill") || lower.includes("require")) {
+                requirements.push(`- ${fragment}.`);
+            } else {
+                responsibilities.push(`- ${fragment}.`);
+            }
+        });
+
+        // Fallback checks to ensure structural consistency if text is unstructured
+        if (responsibilities.length === 0) responsibilities.push("- Execute standard technical production operations matching position specifications.");
+        if (requirements.length === 0) requirements.push("- Demonstrated engineering lifecycle competencies within production bounds.");
+
+        // Cleaned continuous text block layout assembly
+        cleanedJDContent = `Responsibilities:<br>${responsibilities.slice(0, 6).join('<br>')}<br><br>Requirements & Must-Haves:<br>${requirements.slice(0, 6).join('<br>')}`;
+
+        // Local targeted technical architecture question templates based on position context
+        finalQuestions = [
+            `Detail the explicit multi-node state synchronization models and distributed cache invalidation bounds you choose to mitigate race constraints for this ${jobTitle} runtime landscape.`,
+            `Map your precise strategy for system partitioning, database indexing rules, and data access layers to efficiently buffer read/write amplification metrics under peak transactions.`,
+            `Propose a diagnostic roadmap for tracing production memory fragmentation or thread exhaustion failures without triggering service drops across the core infrastructure.`,
+            `Explain how you establish automated contract validation pipelines and instrumentation tracking configurations to monitor mutations safely across platform runtimes.`,
+            `Outline the architectural compromises and network overhead penalties accepted when decoupling your data domains into isolated micro-topologies.`
+        ];
+
+        document.getElementById('downloadBtn').style.display = 'block';
+        alert("File structure successfully built in memory!");
+    }
+
+    function downloadWordFile() {
+        const title = document.getElementById('jobTitle').value || "Technical Position";
+        
+        // Assembling file elements wrapped strictly inside the required continuous structural format
+        let html = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+            <style>
+                body { font-family: 'Verdana', sans-serif; font-size: 11pt; color: #334155; line-height: 1.5; }
+                h1 { font-family: 'Verdana', sans-serif; font-size: 18pt; font-weight: bold; margin: 0 0 12pt 0; padding: 0; }
+                h2 { font-family: 'Verdana', sans-serif; font-size: 14pt; font-weight: bold; margin: 18pt 0 6pt 0; padding: 0; }
+                p { font-family: 'Verdana', sans-serif; font-size: 11pt; margin: 0 0 12pt 0; }
+                .question-block { margin-top: 18pt; margin-bottom: 12pt; }
+                .placeholder-text { color: #A1A1A1; margin-top: 4pt; margin-bottom: 12pt; display: block; }
+            </style>
+        </head>
+        <body>
+            <h1>${title}</h1>
+            
+            <h2>Job Description</h2>
+            <div>${cleanedJDContent}</div>
+            
+            <h2>Candidate Technical Questionnaire</h2>
+            <p>Instructions for Candidate: Please provide explicit technical details, structural implementations, architectural trade-offs, and metrics from your past engineering career to answer the following items.</p>
+            
+            <div class="question-block">
+                <p>1. ${finalQuestions[0]}</p>
+                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
+            </div>
+
+            <div class="question-block">
+                <p>2. ${finalQuestions[1]}</p>
+                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
+            </div>
+
+            <div class="question-block">
+                <p>3. ${finalQuestions[2]}</p>
+                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
+            </div>
+
+            <div class="question-block">
+                <p>4. ${finalQuestions[3]}</p>
+                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
+            </div>
+
+            <div class="question-block">
+                <p>5. ${finalQuestions[4]}</p>
+                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
+            </div>
+        </body>
+        </html>`;
+        
+        const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_assessment_package.doc`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    }
+</script>
+</body>
+</html>
