@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cliff — Local Technical Engine</title>
+    <title>Cliff — Qualification Questionnaire Generator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <style>
@@ -39,40 +39,40 @@
 <body>
 
 <div class="app-container">
-    <header><h1>Cliff</h1><p>Local Technical Engine</p></header>
+    <header><h1>Cliff</h1><p>Exact Style Template Engine</p></header>
 
     <div class="form-group">
-        <label>Job Title</label>
-        <input type="text" id="jobTitle" placeholder="e.g. Senior Backend Engineer">
+        <label>Job Title / Header Context</label>
+        <input type="text" id="jobTitle" value="DOT QUESTIONNAIRE Windows Server Lead - 910 - SAIJP00038947">
     </div>
 
     <div class="form-group">
-        <label>Upload Job Description (.docx)</label>
+        <label>Upload Job Description Document (.docx)</label>
         <div class="file-dropzone" onclick="document.getElementById('fileInput').click()">
-            <p id="dropzoneText">➔ Click to upload .docx</p>
+            <p id="dropzoneText">➔ Click to upload template source (.docx)</p>
             <input type="file" id="fileInput" class="file-input" accept=".docx" onchange="handleFileSelect(event)">
         </div>
     </div>
 
     <div id="workspaceStack">
-        <label>Extracted Document Content</label>
+        <label>Extracted Original Elements</label>
         <textarea id="jobDescription" rows="6"></textarea>
     </div>
 
-    <button id="generateBtn" onclick="processLocally()" style="margin-top:20px;">Generate Questionnaire</button>
-    <button class="btn-secondary" id="downloadBtn" onclick="downloadWordFile()">Download Word File</button>
+    <button id="generateBtn" onclick="processJobDescription()" style="margin-top:20px;">Parse & Map to Template Format</button>
+    <button class="btn-secondary" id="downloadBtn" onclick="downloadWordFile()">Download Formatted Document (.doc)</button>
 </div>
 
 <script>
-    let cleanedJDContent = "";
-    let finalQuestions = [];
+    let organizedSections = { topQuals: [], roleSpecs: [], prefSkills: [] };
+    let citizenshipNote = "";
 
     async function extractDocxText(arrayBuffer) {
         const zip = await JSZip.loadAsync(arrayBuffer);
         const xmlText = await zip.file("word/document.xml").async("text");
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-        return Array.from(xmlDoc.getElementsByTagName("w:t")).map(n => n.textContent).join(" ");
+        return Array.from(xmlDoc.getElementsByTagName("w:t")).map(n => n.textContent).join("\n");
     }
 
     async function handleFileSelect(event) {
@@ -81,117 +81,122 @@
         reader.onload = async (e) => {
             document.getElementById('jobDescription').value = await extractDocxText(e.target.result);
             document.getElementById('workspaceStack').style.display = 'block';
-            document.getElementById('dropzoneText').innerText = `✓ ${file.name}`;
-            
-            if(!document.getElementById('jobTitle').value) {
-                document.getElementById('jobTitle').value = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-            }
+            document.getElementById('dropzoneText').innerText = `✓ Loaded: ${file.name}`;
         };
         reader.readAsArrayBuffer(file);
     }
 
-    // Local Parsing and Questionnaire Building Execution
-    function processLocally() {
+    function processJobDescription() {
         const rawText = document.getElementById('jobDescription').value;
-        const jobTitle = document.getElementById('jobTitle').value || "Technical Position";
+        if (!rawText.trim()) { alert("Please supply content arrays first."); return; }
 
-        if (!rawText.trim()) {
-            alert("Please upload a valid document or input text before generating.");
-            return;
-        }
+        organizedSections = { topQuals: [], roleSpecs: [], prefSkills: [] };
+        citizenshipNote = "";
 
-        // Split text cleanly by common sentence blocks or bullets to reconstruct structurally
-        const fragments = rawText.split(/[.!?;\n]/).map(f => f.trim()).filter(f => f.length > 15);
-        
-        let responsibilities = [];
-        let requirements = [];
+        const uniqueLines = new Set();
 
-        // Simple local deterministic categorizer based on language markers
-        fragments.forEach(fragment => {
-            const lower = fragment.toLowerCase();
-            if (lower.includes("experience") || lower.includes("degree") || lower.includes("must") || lower.includes("skill") || lower.includes("require")) {
-                requirements.push(`- ${fragment}.`);
+        const lines = rawText.split('\n')
+            .map(l => l.trim())
+            .filter(l => {
+                if (l.length < 10) return false;
+                const low = l.toLowerCase();
+                
+                if (low.includes("checklist") || 
+                    low.includes("explain how the candidate") || 
+                    low.includes("under each bullet") || 
+                    low.includes("not met, simply write") || 
+                    low.includes("avoid restating") || 
+                    low.includes("instead, reference") || 
+                    low.includes("aim for 2 to 3") ||
+                    low.includes("submission") ||
+                    low.includes("company") ||
+                    low.includes("candidate name") ||
+                    low.includes("meet the lcat")) {
+                    return false;
+                }
+                return true;
+            });
+
+        lines.forEach(line => {
+            if (uniqueLines.has(line)) return;
+            uniqueLines.add(line);
+
+            const lower = line.toLowerCase();
+            
+            if (lower.includes("candidate must be a u.s. citizen") || lower.includes("public trust")) {
+                citizenshipNote = line;
+            } else if (lower.includes("cert") || lower.includes("preferred") || lower.includes("scrum") || lower.includes("pmp") || lower.includes("itil") || lower.includes("architect") || lower.includes("cloud") || lower.includes("migrations")) {
+                organizedSections.prefSkills.push(line);
+            } else if (lower.includes("managing") || lower.includes("teams of") || lower.includes("personnel") || lower.includes("manager") || lower.includes("multi-discipline") || lower.includes("itsm") || lower.includes("operating systems") || lower.includes("interpersonal")) {
+                organizedSections.roleSpecs.push(line);
             } else {
-                responsibilities.push(`- ${fragment}.`);
+                organizedSections.topQuals.push(line);
             }
         });
 
-        // Fallback checks to ensure structural consistency if text is unstructured
-        if (responsibilities.length === 0) responsibilities.push("- Execute standard technical production operations matching position specifications.");
-        if (requirements.length === 0) requirements.push("- Demonstrated engineering lifecycle competencies within production bounds.");
-
-        // Cleaned continuous text block layout assembly
-        cleanedJDContent = `Responsibilities:<br>${responsibilities.slice(0, 6).join('<br>')}<br><br>Requirements & Must-Haves:<br>${requirements.slice(0, 6).join('<br>')}`;
-
-        // Local targeted technical architecture question templates based on position context
-        finalQuestions = [
-            `Detail the explicit multi-node state synchronization models and distributed cache invalidation bounds you choose to mitigate race constraints for this ${jobTitle} runtime landscape.`,
-            `Map your precise strategy for system partitioning, database indexing rules, and data access layers to efficiently buffer read/write amplification metrics under peak transactions.`,
-            `Propose a diagnostic roadmap for tracing production memory fragmentation or thread exhaustion failures without triggering service drops across the core infrastructure.`,
-            `Explain how you establish automated contract validation pipelines and instrumentation tracking configurations to monitor mutations safely across platform runtimes.`,
-            `Outline the architectural compromises and network overhead penalties accepted when decoupling your data domains into isolated micro-topologies.`
-        ];
-
         document.getElementById('downloadBtn').style.display = 'block';
-        alert("File structure successfully built in memory!");
+        alert("Categorization complete! Submissions styles mapped.");
+    }
+
+    function buildTemplateHeaderBlock(headerTitle) {
+        return `
+            <p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#000000; font-weight:bold; margin-top:14pt; margin-bottom:4pt;">Explain how the candidate meets the ${headerTitle}:</p>
+            <p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#595959; margin-bottom:3pt; margin-left:15pt;">• Under each bullet point, briefly explain how the candidate meets the requirement.</p>
+            <p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#595959; margin-bottom:3pt; margin-left:15pt;">• If the requirement is not met, simply write “N/A.”</p>
+            <p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#595959; margin-bottom:3pt; margin-left:15pt;">• Avoid restating the requirement or answering with a simple “yes.”</p>
+            <p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#595959; margin-bottom:3pt; margin-left:15pt;">• Instead, reference where the experience appears on the candidate’s resume and provide a concise explanation of what that experience entails.</p>
+            <p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#595959; margin-bottom:12pt; margin-left:15pt;">• Aim for 2 to 3 sentences—no full paragraphs are necessary.</p>
+        `;
+    }
+
+    function buildTemplateItems(items) {
+        if(items.length === 0) return `<p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#000000; margin-left:15pt; margin-bottom:12pt;">[N/A]</p>`;
+        return items.map(item => `
+            <div style="margin-bottom:12pt; page-break-inside: avoid;">
+                <p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#000000; margin-left:15pt; margin-bottom:4pt;">• ${item}</p>
+                <p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#000000; margin-left:30pt; margin-top:2pt; margin-bottom:8pt;">[Type response details matching candidate resume path validation points here]</p>
+            </div>
+        `).join('');
     }
 
     function downloadWordFile() {
-        const title = document.getElementById('jobTitle').value || "Technical Position";
+        const title = document.getElementById('jobTitle').value || "DOT QUESTIONNAIRE Windows Server Lead - 910 - SAIJP00038947";
         
-        // Assembling file elements wrapped strictly inside the required continuous structural format
         let html = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
         <head>
             <style>
-                body { font-family: 'Verdana', sans-serif; font-size: 11pt; color: #334155; line-height: 1.5; }
-                h1 { font-family: 'Verdana', sans-serif; font-size: 18pt; font-weight: bold; margin: 0 0 12pt 0; padding: 0; }
-                h2 { font-family: 'Verdana', sans-serif; font-size: 14pt; font-weight: bold; margin: 18pt 0 6pt 0; padding: 0; }
-                p { font-family: 'Verdana', sans-serif; font-size: 11pt; margin: 0 0 12pt 0; }
-                .question-block { margin-top: 18pt; margin-bottom: 12pt; }
-                .placeholder-text { color: #A1A1A1; margin-top: 4pt; margin-bottom: 12pt; display: block; }
+                body { font-family: 'Calibri', sans-serif; font-size: 11pt; color: #000000; line-height: 1.4; }
+                p { font-family: 'Calibri', sans-serif; font-size: 11pt; margin: 0; padding: 0; color: #000000; }
             </style>
         </head>
         <body>
-            <h1>${title}</h1>
+            <p style="font-family:'Calibri',sans-serif; font-size:14pt; font-weight:bold; color:#000000; margin-bottom:2pt;">RESUME REVIEW AND SUBMISSION</p>
+            <p style="font-family:'Calibri',sans-serif; font-size:12pt; font-weight:bold; color:#000000; margin-bottom:12pt;">Resume Submission Checklist</p>
             
-            <h2>Job Description</h2>
-            <div>${cleanedJDContent}</div>
+            <p style="font-family:'Arial',sans-serif; font-size:11pt; color:#FF0000; margin-bottom:14pt;">Complete this checklist to facilitate resume review and submission.</p>
+            <p style="font-family:'Arial',sans-serif; font-size:11pt; font-weight:bold; color:#FF0000; margin-bottom:4pt;">Company  :  Leidos</p>
+            <p style="font-family:'Arial',sans-serif; font-size:11pt; font-weight:bold; color:#FF0000; margin-bottom:4pt;">Candidate Name  :  [Candidate Name]</p>
+            <p style="font-family:'Arial',sans-serif; font-size:11pt; font-weight:bold; color:#FF0000; margin-bottom:4pt;">Meet the LCAT education requirement?  :</p>
+            <p style="font-family:'Arial',sans-serif; font-size:11pt; font-weight:bold; color:#FF0000; margin-bottom:18pt;">Meet the LCAT experience requirement?  :</p>
             
-            <h2>Candidate Technical Questionnaire</h2>
-            <p>Instructions for Candidate: Please provide explicit technical details, structural implementations, architectural trade-offs, and metrics from your past engineering career to answer the following items.</p>
+            ${buildTemplateHeaderBlock("Top Qualifications, Skills, Experience or Certifications")}
+            ${buildTemplateItems(organizedSections.topQuals)}
             
-            <div class="question-block">
-                <p>1. ${finalQuestions[0]}</p>
-                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
-            </div>
+            ${buildTemplateHeaderBlock("Job Role Specific Requirements")}
+            ${buildTemplateItems(organizedSections.roleSpecs)}
+            
+            ${buildTemplateHeaderBlock("Preferred Skills and Qualifications")}
+            ${buildTemplateItems(organizedSections.prefSkills)}
 
-            <div class="question-block">
-                <p>2. ${finalQuestions[1]}</p>
-                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
-            </div>
-
-            <div class="question-block">
-                <p>3. ${finalQuestions[2]}</p>
-                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
-            </div>
-
-            <div class="question-block">
-                <p>4. ${finalQuestions[3]}</p>
-                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
-            </div>
-
-            <div class="question-block">
-                <p>5. ${finalQuestions[4]}</p>
-                <p class="placeholder-text">[Type your detailed technical implementation, schema/architecture choices, and metrics here]</p>
-            </div>
+            ${citizenshipNote ? `<p style="font-family:'Calibri',sans-serif; font-size:11pt; color:#000000; margin-top:20pt; font-weight:bold;">Note: ${citizenshipNote.replace(/Note:\s*/i, "")}</p>` : ""}
         </body>
         </html>`;
         
         const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_assessment_package.doc`;
+        a.download = `${title.replace(/[^a-zA-Z0-9\s-]/g, "")}.doc`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
